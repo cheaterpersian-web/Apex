@@ -1,0 +1,1 @@
+"""VPN Protocol Status Telegram Bot package."""

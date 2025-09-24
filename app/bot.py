@@ -48,18 +48,50 @@ async def cmd_status(storage: JsonStorage, update: Update, context: ContextTypes
         await update.message.reply_text("No protocols configured. Use /add_protocol <json>.")
         return
 
-    lines = ["Protocol Status:"]
+    connected_lines: list[str] = []
+    disconnected_lines: list[str] = []
+    error_lines: list[str] = []
+
+    def fmt_line(icon: str, cfg: ProtocolConfig, lat: str, ts: str, err: str | None) -> str:
+        base = f"{icon} <b>{cfg.name}</b> <code>({cfg.type.value})</code> • {lat} • {ts}"
+        if err:
+            short_err = (err[:140] + "…") if len(err) > 140 else err
+            return base + f"\n<i>error: {short_err}</i>"
+        return base
+
     for cfg in protocols:
         s = status.get(cfg.id)
-        state = s.get("status") if s else "-"
+        state: str = (s.get("status") if s else "unknown").lower()
         lat = format_latency(s.get("latency_ms") if s else None)
         ts = s.get("timestamp_iso") if s else "-"
         err = s.get("error") if s else None
-        line = f"• {cfg.name} ({cfg.type.value}) — {state.upper()} — {lat} — {ts}"
-        if err and state != "connected":
-            line += f"\n   error: {err}"
-        lines.append(line)
-    await update.message.reply_text("\n".join(lines))
+
+        if state == "connected":
+            connected_lines.append(fmt_line("✅", cfg, lat, ts, None))
+        elif state == "disconnected":
+            disconnected_lines.append(fmt_line("❌", cfg, lat, ts, err))
+        else:
+            error_lines.append(fmt_line("⚠️", cfg, lat, ts, err))
+
+    total = len(protocols)
+    n_conn = len(connected_lines)
+    n_disc = len(disconnected_lines)
+    n_err = len(error_lines)
+
+    lines: list[str] = [
+        f"<b>Protocol Status</b> — total: {total} | connected: {n_conn} | disconnected: {n_disc} | error: {n_err}",
+    ]
+    if connected_lines:
+        lines.append("\n<b>Connected</b>:")
+        lines.extend(connected_lines)
+    if disconnected_lines:
+        lines.append("\n<b>Disconnected</b>:")
+        lines.extend(disconnected_lines)
+    if error_lines:
+        lines.append("\n<b>Errors</b>:")
+        lines.extend(error_lines)
+
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 async def cmd_refresh(orchestrator_run_once: Callable[[], Awaitable[None]], update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

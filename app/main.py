@@ -68,74 +68,72 @@ def main():
 
     # Schedule periodic checks via post_init so job_queue is available
     async def post_init(application):
-        # Ensure default protocols exist (only if none configured)
-        existing = await storage.list_protocols()
-        if not existing:
-            host = _detect_server_host()
-            defaults = [
-                ProtocolConfig(
-                    id="openvpn-default",
-                    name="OpenVPN UDP",
-                    type=ProtocolType.OPENVPN,
-                    host=host,
-                    port=1194,
-                    transport=TransportType.UDP,
-                ),
-                ProtocolConfig(
-                    id="wireguard-default",
-                    name="WireGuard UDP",
-                    type=ProtocolType.WIREGUARD,
-                    host=host,
-                    port=51820,
-                    transport=TransportType.UDP,
-                ),
-                ProtocolConfig(
-                    id="shadowsocks-default",
-                    name="Shadowsocks TCP",
-                    type=ProtocolType.SHADOWSOCKS,
-                    host=host,
-                    port=8388,
-                    transport=TransportType.TCP,
-                ),
-                ProtocolConfig(
-                    id="v2ray-tcp-default",
-                    name="V2Ray TCP (VLESS TLS)",
-                    type=ProtocolType.V2RAY,
-                    host=host,
-                    port=443,
-                    transport=TransportType.TCP,
-                    meta={"protocol": "vless", "security": "tls"},
-                ),
-                ProtocolConfig(
-                    id="v2ray-grpc-default",
-                    name="V2Ray gRPC (VLESS TLS)",
-                    type=ProtocolType.V2RAY,
-                    host=host,
-                    port=443,
-                    transport=TransportType.TCP,
-                    meta={"protocol": "vless", "network": "grpc", "serviceName": "grpc", "security": "tls"},
-                ),
-                ProtocolConfig(
-                    id="reality-default",
-                    name="Reality (VLESS)",
-                    type=ProtocolType.REALITY,
-                    host=host,
-                    port=443,
-                    transport=TransportType.TCP,
-                    meta={"protocol": "vless", "security": "reality"},
-                ),
-                ProtocolConfig(
-                    id="generic-http-default",
-                    name="Generic TCP 80",
-                    type=ProtocolType.OTHER,
-                    host=host,
-                    port=80,
-                    transport=TransportType.TCP,
-                ),
-            ]
-            for cfg_item in defaults:
-                await storage.add_protocol(cfg_item)
-            logging.info("Default protocols initialized for host %s", host)
+        # Ensure default protocols exist (always ensure/update by id)
+        host = _detect_server_host()
+        defaults = [
+            ProtocolConfig(
+                id="openvpn-default",
+                name="OpenVPN UDP",
+                type=ProtocolType.OPENVPN,
+                host=host,
+                port=1194,
+                transport=TransportType.UDP,
+            ),
+            ProtocolConfig(
+                id="wireguard-default",
+                name="WireGuard UDP",
+                type=ProtocolType.WIREGUARD,
+                host=host,
+                port=51820,
+                transport=TransportType.UDP,
+            ),
+            ProtocolConfig(
+                id="shadowsocks-default",
+                name="Shadowsocks TCP",
+                type=ProtocolType.SHADOWSOCKS,
+                host=host,
+                port=8388,
+                transport=TransportType.TCP,
+            ),
+            ProtocolConfig(
+                id="v2ray-tcp-default",
+                name="V2Ray TCP (VLESS TLS)",
+                type=ProtocolType.V2RAY,
+                host=host,
+                port=443,
+                transport=TransportType.TCP,
+                meta={"protocol": "vless", "security": "tls"},
+            ),
+            ProtocolConfig(
+                id="v2ray-grpc-default",
+                name="V2Ray gRPC (VLESS TLS)",
+                type=ProtocolType.V2RAY,
+                host=host,
+                port=443,
+                transport=TransportType.TCP,
+                meta={"protocol": "vless", "network": "grpc", "serviceName": "grpc", "security": "tls"},
+            ),
+            ProtocolConfig(
+                id="reality-default",
+                name="Reality (VLESS)",
+                type=ProtocolType.REALITY,
+                host=host,
+                port=443,
+                transport=TransportType.TCP,
+                meta={"protocol": "vless", "security": "reality"},
+            ),
+            ProtocolConfig(
+                id="generic-http-default",
+                name="Generic TCP 80",
+                type=ProtocolType.OTHER,
+                host=host,
+                port=80,
+                transport=TransportType.TCP,
+            ),
+        ]
+        for cfg_item in defaults:
+            await storage.add_protocol(cfg_item)
+        logging.info("Default protocols ensured for host %s", host)
 
         async def job_run_once(_):
             await orchestrator.run_once()

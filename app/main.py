@@ -9,6 +9,7 @@ from .settings import load_config
 from .storage import JsonStorage
 from .orchestrator import Orchestrator
 from .bot import build_app, register_handlers
+from .api import run_server as run_agent_api
 from .models import ProtocolConfig, ProtocolType, TransportType
 
 
@@ -328,6 +329,18 @@ def main():
                 asyncio.get_running_loop().create_task(periodic_checker())
             return
         jq.run_repeating(job_run_once, interval=cfg.check_interval_seconds, first=3)
+
+        # Start agent API server (for regional reports)
+        async def start_api():
+            try:
+                await run_agent_api(storage, cfg.agent_api_host, cfg.agent_api_port, cfg.agent_token)
+            except Exception as exc:  # noqa: BLE001
+                logging.exception("Agent API failed: %s", exc)
+
+        try:
+            application.create_task(start_api())
+        except Exception:  # noqa: BLE001
+            asyncio.get_running_loop().create_task(start_api())
 
     app = build_app(cfg.telegram_bot_token, post_init=post_init)
 

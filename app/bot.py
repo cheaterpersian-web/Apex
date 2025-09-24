@@ -44,6 +44,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_status(storage: JsonStorage, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     protocols = await storage.list_protocols()
     status = await storage.get_status()
+    iran_status = await storage.get_region_status("iran")
     if not protocols:
         await update.message.reply_text("No protocols configured. Use /add_protocol <json>.")
         return
@@ -90,6 +91,36 @@ async def cmd_status(storage: JsonStorage, update: Update, context: ContextTypes
     if error_lines:
         lines.append("\n<b>Errors</b>:")
         lines.extend(error_lines)
+
+    # Iran vantage (if any)
+    if iran_status:
+        iran_conn = []
+        iran_disc = []
+        for cfg in protocols:
+            s = iran_status.get(cfg.id)
+            if not s:
+                continue
+            state = str(s.get("status", "")).lower()
+            lat = format_latency(s.get("latency_ms"))
+            ts = s.get("timestamp_iso") or "-"
+            err = s.get("error")
+            icon = "✅" if state == "connected" else ("❌" if state == "disconnected" else "⚠️")
+            base = f"{icon} <b>{cfg.name}</b> <code>({cfg.type.value})</code> • {lat} • {ts}"
+            if state == "connected":
+                iran_conn.append(base)
+            else:
+                if err and state != "connected":
+                    short_err = (err[:140] + "…") if len(err) > 140 else err
+                    base += f"\n<i>error: {short_err}</i>"
+                iran_disc.append(base)
+        if iran_conn or iran_disc:
+            lines.append("\n<b>Iran vantage</b>:")
+            if iran_conn:
+                lines.append("<u>Connected</u>:")
+                lines.extend(iran_conn)
+            if iran_disc:
+                lines.append("<u>Disconnected</u>:")
+                lines.extend(iran_disc)
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 

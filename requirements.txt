@@ -1,0 +1,9 @@
+# Core runtime
+python-telegram-bot==21.4
+aiohttp==3.10.5
+aiohttp-socks==0.9.1
+PyYAML==6.0.2
+python-dotenv==1.0.1
+
+# Optional performance (Linux only). Safe if not installed.
+uvloop==0.20.0

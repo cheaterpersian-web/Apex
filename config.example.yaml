@@ -1,0 +1,10 @@
+# Global configuration for the bot
+check_interval_seconds: 60
+# URL fetched via proxies to validate connectivity (HTTP 204/200 expected)
+proxy_test_url: https://www.google.com/generate_204
+# Directory for JSON persistence
+storage_dir: ./data
+# Max seconds to wait for TCP connect
+tcp_timeout_seconds: 5
+# Max seconds to wait for UDP best-effort probe
+udp_timeout_seconds: 3

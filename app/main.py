@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 
 from .settings import load_config
 from .storage import JsonStorage
@@ -54,9 +55,26 @@ def main():
     async def post_init(application):
         async def job_run_once(_):
             await orchestrator.run_once()
-        application.job_queue.run_repeating(
-            job_run_once, interval=cfg.check_interval_seconds, first=3
-        )
+        jq = getattr(application, "job_queue", None)
+        if jq is None:
+            logging.warning("JobQueue is not available. Falling back to asyncio task. To enable JobQueue, install python-telegram-bot with the job-queue extra.")
+
+            async def periodic_checker():
+                await asyncio.sleep(3)
+                while True:
+                    try:
+                        await orchestrator.run_once()
+                    except Exception as exc:  # noqa: BLE001
+                        logging.exception("Periodic check failed: %s", exc)
+                    await asyncio.sleep(cfg.check_interval_seconds)
+
+            # Bind task to application's lifecycle if available
+            try:
+                application.create_task(periodic_checker())
+            except Exception:  # noqa: BLE001
+                asyncio.get_running_loop().create_task(periodic_checker())
+            return
+        jq.run_repeating(job_run_once, interval=cfg.check_interval_seconds, first=3)
 
     app = build_app(cfg.telegram_bot_token, post_init=post_init)
 

@@ -50,7 +50,15 @@ def main():
         cfg.udp_timeout_seconds,
     )
 
-    app = build_app(cfg.telegram_bot_token)
+    # Schedule periodic checks via post_init so job_queue is available
+    async def post_init(application):
+        async def job_run_once(_):
+            await orchestrator.run_once()
+        application.job_queue.run_repeating(
+            job_run_once, interval=cfg.check_interval_seconds, first=3
+        )
+
+    app = build_app(cfg.telegram_bot_token, post_init=post_init)
 
     # Wire bot commands
     register_handlers(app, storage, orchestrator.run_once)
@@ -58,11 +66,7 @@ def main():
     # Notifications on transition to CONNECTED
     orchestrator.subscribe(notify_handler_factory(app, storage))
 
-    # Schedule periodic checks via JobQueue
-    async def job_run_once(_):
-        await orchestrator.run_once()
-
-    app.job_queue.run_repeating(job_run_once, interval=cfg.check_interval_seconds, first=3)
+    # Periodic job scheduled in post_init above
 
     # Start polling (blocks until interrupted)
     app.run_polling(close_loop=False)

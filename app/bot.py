@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Callable, Awaitable
+from typing import Callable, Awaitable, Optional
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -12,8 +12,11 @@ from .storage import JsonStorage
 from .utils import format_latency
 
 
-def build_app(token: str) -> Application:
-    return ApplicationBuilder().token(token).build()
+def build_app(token: str, post_init: Optional[Callable[[Application], Awaitable[None]]] = None) -> Application:
+    builder = ApplicationBuilder().token(token)
+    if post_init is not None:
+        builder = builder.post_init(post_init)
+    return builder.build()
 
 
 def _help_text() -> str:

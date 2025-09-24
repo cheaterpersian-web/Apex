@@ -87,7 +87,7 @@ async def cmd_list_protocols(storage: JsonStorage, update: Update, context: Cont
         return
     lines = ["Configured Protocols:"]
     for cfg in protocols:
-        lines.append(f"• {cfg.id}: {cfg.name} ({cfg.type.value}) {cfg.host}:{cfg.port}/{cfg.transport.value}")
+        lines.append(f"• {cfg.id}: {cfg.name} ({cfg.type.value}) {cfg.transport.value}")
     await update.message.reply_text("\n".join(lines))
 
 

@@ -17,6 +17,7 @@ class JsonStorage:
             "protocols": os.path.join(self.storage_dir, "protocols.json"),
             "status": os.path.join(self.storage_dir, "status.json"),
             "subscribers": os.path.join(self.storage_dir, "subscribers.json"),
+            "status_regions": os.path.join(self.storage_dir, "status_regions.json"),
         }
         # Ensure files exist
         for key, path in self._paths.items():
@@ -28,6 +29,8 @@ class JsonStorage:
                         json.dump({}, f)
                     elif key == "subscribers":
                         json.dump([], f)
+                    elif key == "status_regions":
+                        json.dump({}, f)
 
     async def _read_json(self, key: str):
         async with self._lock:
@@ -89,6 +92,24 @@ class JsonStorage:
             "error": result.error,
         }
         await self._write_json("status", status)
+
+    # Regional Statuses
+    async def get_region_status(self, region: str) -> Dict[str, CheckResult]:
+        all_regions = await self._read_json("status_regions")
+        return all_regions.get(region, {})
+
+    async def update_region_status(self, region: str, result: CheckResult) -> None:
+        all_regions = await self._read_json("status_regions")
+        region_map = all_regions.get(region, {})
+        region_map[result.protocol_id] = {
+            "protocol_id": result.protocol_id,
+            "status": result.status.value,
+            "latency_ms": result.latency_ms,
+            "timestamp_iso": result.timestamp_iso,
+            "error": result.error,
+        }
+        all_regions[region] = region_map
+        await self._write_json("status_regions", all_regions)
 
     # Subscribers
     async def list_subscribers(self) -> List[Subscriber]:

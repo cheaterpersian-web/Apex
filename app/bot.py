@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Callable, Awaitable
+from typing import Callable, Awaitable, Optional
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -12,8 +12,11 @@ from .storage import JsonStorage
 from .utils import format_latency
 
 
-def build_app(token: str) -> Application:
-    return ApplicationBuilder().token(token).build()
+def build_app(token: str, post_init: Optional[Callable[[Application], Awaitable[None]]] = None) -> Application:
+    builder = ApplicationBuilder().token(token)
+    if post_init is not None:
+        builder = builder.post_init(post_init)
+    return builder.build()
 
 
 def _help_text() -> str:
@@ -41,22 +44,85 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_status(storage: JsonStorage, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     protocols = await storage.list_protocols()
     status = await storage.get_status()
+    iran_status = await storage.get_region_status("iran")
     if not protocols:
         await update.message.reply_text("No protocols configured. Use /add_protocol <json>.")
         return
 
-    lines = ["Protocol Status:"]
+    connected_lines: list[str] = []
+    disconnected_lines: list[str] = []
+    error_lines: list[str] = []
+
+    def fmt_line(icon: str, cfg: ProtocolConfig, lat: str, ts: str, err: str | None) -> str:
+        base = f"{icon} <b>{cfg.name}</b> <code>({cfg.type.value})</code> • {lat} • {ts}"
+        if err:
+            short_err = (err[:140] + "…") if len(err) > 140 else err
+            return base + f"\n<i>error: {short_err}</i>"
+        return base
+
     for cfg in protocols:
         s = status.get(cfg.id)
-        state = s.get("status") if s else "-"
+        state: str = (s.get("status") if s else "unknown").lower()
         lat = format_latency(s.get("latency_ms") if s else None)
         ts = s.get("timestamp_iso") if s else "-"
         err = s.get("error") if s else None
-        line = f"• {cfg.name} ({cfg.type.value}) — {state.upper()} — {lat} — {ts}"
-        if err and state != "connected":
-            line += f"\n   error: {err}"
-        lines.append(line)
-    await update.message.reply_text("\n".join(lines))
+
+        if state == "connected":
+            connected_lines.append(fmt_line("✅", cfg, lat, ts, None))
+        elif state == "disconnected":
+            disconnected_lines.append(fmt_line("❌", cfg, lat, ts, err))
+        else:
+            error_lines.append(fmt_line("⚠️", cfg, lat, ts, err))
+
+    total = len(protocols)
+    n_conn = len(connected_lines)
+    n_disc = len(disconnected_lines)
+    n_err = len(error_lines)
+
+    lines: list[str] = [
+        f"<b>Protocol Status</b> — total: {total} | connected: {n_conn} | disconnected: {n_disc} | error: {n_err}",
+    ]
+    if connected_lines:
+        lines.append("\n<b>Connected</b>:")
+        lines.extend(connected_lines)
+    if disconnected_lines:
+        lines.append("\n<b>Disconnected</b>:")
+        lines.extend(disconnected_lines)
+    if error_lines:
+        lines.append("\n<b>Errors</b>:")
+        lines.extend(error_lines)
+
+    # Iran vantage (if any)
+    if iran_status:
+        iran_conn = []
+        iran_disc = []
+        for cfg in protocols:
+            s = iran_status.get(cfg.id)
+            if not s:
+                continue
+            state = str(s.get("status", "")).lower()
+            lat = format_latency(s.get("latency_ms"))
+            ts = s.get("timestamp_iso") or "-"
+            err = s.get("error")
+            icon = "✅" if state == "connected" else ("❌" if state == "disconnected" else "⚠️")
+            base = f"{icon} <b>{cfg.name}</b> <code>({cfg.type.value})</code> • {lat} • {ts}"
+            if state == "connected":
+                iran_conn.append(base)
+            else:
+                if err and state != "connected":
+                    short_err = (err[:140] + "…") if len(err) > 140 else err
+                    base += f"\n<i>error: {short_err}</i>"
+                iran_disc.append(base)
+        if iran_conn or iran_disc:
+            lines.append("\n<b>Iran vantage</b>:")
+            if iran_conn:
+                lines.append("<u>Connected</u>:")
+                lines.extend(iran_conn)
+            if iran_disc:
+                lines.append("<u>Disconnected</u>:")
+                lines.extend(iran_disc)
+
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 async def cmd_refresh(orchestrator_run_once: Callable[[], Awaitable[None]], update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -84,7 +150,7 @@ async def cmd_list_protocols(storage: JsonStorage, update: Update, context: Cont
         return
     lines = ["Configured Protocols:"]
     for cfg in protocols:
-        lines.append(f"• {cfg.id}: {cfg.name} ({cfg.type.value}) {cfg.host}:{cfg.port}/{cfg.transport.value}")
+        lines.append(f"• {cfg.id}: {cfg.name} ({cfg.type.value}) {cfg.transport.value}")
     await update.message.reply_text("\n".join(lines))
 
 
